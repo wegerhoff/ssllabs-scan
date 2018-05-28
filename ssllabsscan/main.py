@@ -12,8 +12,9 @@ from ssllabsscan.report_template import REPORT_HTML
 from ssllabsscan.ssllabs_client import SSLLabsClient, SUMMARY_COL_NAMES
 
 
-SUMMARY_CSV = "summary.csv"
-SUMMARY_HTML = "summary.html"
+TARGET_DIR = "./results"
+SUMMARY_CSV = "{}/{}".format(TARGET_DIR, "summary.csv")
+SUMMARY_HTML = "{}/{}".format(TARGET_DIR, "summary.html")
 VAR_TITLE = "{{VAR_TITLE}}"
 VAR_DATA = "{{VAR_DATA}}"
 DEFAULT_TITLE = "SSL Labs Analysis Summary Report"
