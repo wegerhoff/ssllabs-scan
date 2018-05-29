@@ -23,6 +23,7 @@ CHAIN_ISSUES = {
 
 # Forward secrecy protects past sessions against future compromises of secret keys or passwords.
 FORWARD_SECRECY = {
+    "0": "No WEAK",
     "1": "With some browsers WEAK",
     "2": "With modern browsers",
     "4": "Yes (with most browsers) ROBUST",
@@ -33,7 +34,7 @@ PROTOCOLS = ["TLS 1.2", "TLS 1.1", "TLS 1.0", "SSL 3.0 INSECURE", "SSL 2.0 INSEC
 VULNERABLES = ["Vuln Beast", "Vuln Drown", "Vuln Heartbleed", "Vuln FREAK",
                "Vuln openSsl Ccs", "Vuln openSSL LuckyMinus20", "Vuln POODLE", "Vuln POODLE TLS"]
 
-SUMMARY_COL_NAMES = ["Host", "Grade", "HasWarnings", "Cert Expiry", "Chain Status", "Forward Secrecy", "Heartbeat ext"] + VULNERABLES + PROTOCOLS
+SUMMARY_COL_NAMES = ["Domain", "Grade", "IP", "Status", "HasWarnings", "Cert Expiry", "Chain Status", "Forward Secrecy", "Heartbeat ext"] + VULNERABLES + PROTOCOLS + ["Complete Report"]
 
 
 class SSLLabsClient():
@@ -51,7 +52,7 @@ class SSLLabsClient():
         # write the summary to file
         self.append_summary_csv(summary_csv_file, host, data)
 
-    def start_new_scan(self, host, publish="off", startNew="on", all="done", ignoreMismatch="on"):
+    def start_new_scan(self, host, publish="off", startNew="off", all="done", ignoreMismatch="on"):
         path = API_URL
         payload = {
             "host": host,
@@ -81,31 +82,46 @@ class SSLLabsClient():
     def append_summary_csv(self, summary_file, host, data):
         # write the summary to file
         with open(summary_file, "a") as outfile:
-            for ep in data["endpoints"]:
-                # see SUMMARY_COL_NAMES
+            if 'endpoints' in data:
+                for ep in data["endpoints"]:
+                    # see SUMMARY_COL_NAMES
+                    summary = [
+                        host,
+                        "-" if 'grade' not in ep else ep["grade"],
+                        "-" if 'ipAddress' not in ep else ep["ipAddress"],
+                        ep["statusMessage"],
+                        "-" if 'hasWarnings' not in ep else ep["hasWarnings"],
+                        "-" if 'notAfter' not in ep["details"]["cert"] else self.prepare_datetime(ep["details"]["cert"]["notAfter"]),
+                        "-" if 'issues' not in ep["details"]["chain"] else CHAIN_ISSUES[str(ep["details"]["chain"]["issues"])],
+                        "-" if 'forwardSecrecy' not in ep["details"] else FORWARD_SECRECY[str(ep["details"]["forwardSecrecy"])],
+                        "-" if 'heartbeat' not in ep["details"] else ep["details"]["heartbeat"],
+                        "-" if 'vulnBeast' not in ep["details"] else ep["details"]["vulnBeast"],
+                        "-" if 'drownVulnerable' not in ep["details"] else ep["details"]["drownVulnerable"],
+                        "-" if 'heartbleed' not in ep["details"] else ep["details"]["heartbleed"],
+                        "-" if 'freak' not in ep["details"] else ep["details"]["freak"],
+                        "-" if 'openSslCcs' not in ep["details"] else
+                            False if ep["details"]["openSslCcs"] == 1 else True,
+                        "-" if 'openSSLLuckyMinus20' not in ep["details"] else
+                            False if ep["details"]["openSSLLuckyMinus20"] == 1 else True,
+                        "-" if 'poodle' not in ep["details"] else ep["details"]["poodle"],
+                        "-" if 'poodleTls' not in ep["details"] else
+                            False if ep["details"]["poodleTls"] == 1 else True,
+                    ]
+                    for protocol in PROTOCOLS:
+                        found = False
+                        for p in ep["details"]["protocols"]:
+                            if protocol.startswith("{} {}".format(p["name"], p["version"])):
+                                found = True
+                                break
+                        summary += ["Yes" if found is True else "No"]
+                    summary += ["{}.json".format(host)]
+            else:
+                # Catch "Unable to resolve domain name"
                 summary = [
                     host,
-                    ep["grade"],
-                    ep["hasWarnings"],
-                    self.prepare_datetime(ep["details"]["cert"]["notAfter"]),
-                    CHAIN_ISSUES[str(ep["details"]["chain"]["issues"])],
-                    FORWARD_SECRECY[str(ep["details"]["forwardSecrecy"])],
-                    ep["details"]["heartbeat"],
-                    ep["details"]["vulnBeast"],
-                    ep["details"]["drownVulnerable"],
-                    ep["details"]["heartbleed"],
-                    ep["details"]["freak"],
-                    False if ep["details"]["openSslCcs"] == 1 else True,
-                    False if ep["details"]["openSSLLuckyMinus20"] == 1 else True,
-                    ep["details"]["poodle"],
-                    False if ep["details"]["poodleTls"] == 1 else True,
+                    "-",
+                    "Unable to resolve domain name",
+                    "-","-","-","-","-","-","-","-","-","-","-","-","-","-","-","-","-","-","-","-"
                 ]
-                for protocol in PROTOCOLS:
-                    found = False
-                    for p in ep["details"]["protocols"]:
-                        if protocol.startswith("{} {}".format(p["name"], p["version"])):
-                            found = True
-                            break
-                    summary += ["Yes" if found is True else "No"]
 
-                outfile.write(",".join(str(s) for s in summary) + "\n")
+            outfile.write(",".join(str(s) for s in summary) + "\n")

@@ -7,6 +7,8 @@ import os
 import shutil
 import sys
 import traceback
+import datetime
+import errno
 
 from ssllabsscan.report_template import REPORT_HTML
 from ssllabsscan.ssllabs_client import SSLLabsClient, SUMMARY_COL_NAMES
@@ -17,7 +19,7 @@ SUMMARY_CSV = "{}/{}".format(TARGET_DIR, "summary.csv")
 SUMMARY_HTML = "{}/{}".format(TARGET_DIR, "summary.html")
 VAR_TITLE = "{{VAR_TITLE}}"
 VAR_DATA = "{{VAR_DATA}}"
-DEFAULT_TITLE = "SSL Labs Analysis Summary Report"
+DEFAULT_TITLE = "SSL Labs Analysis Summary Report (Last scan: " + datetime.datetime.now(datetime.timezone.utc).strftime('%d-%m-%Y %H:%M (UTC)') + ")"
 DEFAULT_STYLES = "styles.css"
 
 
@@ -29,9 +31,34 @@ def output_summary_html(input_csv, output_html):
         reader = csv.reader(csvfile)
         for row in reader:
             if row[0].startswith("#"):
-                data += "<tr><th>{}</th></tr>".format('</th><th>'.join(row))
+                data += "<tr><th>{}</th>".format(row[0][1:])
+                row.pop(0)
+                data += "<th>{}</th></tr>\n".format('</th><th>'.join(row))
             else:
-                data += '<tr class="{}"><td>{}</td></tr>'.format(row[1][:1], '</td><td>'.join(row))
+                # css of row
+                if row[1][:1] == '-':
+                    # hosts without rating due to missing ssl support/unavailable hosts etc.
+                    cssclass = 'Z';
+                else:
+                    cssclass = row[1][:1]
+                data += '<tr class="{}">'.format(cssclass)
+
+
+                data += '<td><a href="https://{}">{}</a></td>'.format(row[0][1:], row[0])
+                row.pop(0)
+
+                # get the link to the full report
+                complete_report = row.pop(-1)
+
+
+                # SSL Rating fields for this row
+                data += '<td>{}</td>'.format('</td><td>'.join(row))
+
+                # append the link to the full report
+                if complete_report != '-':
+                    data += '<td><a href="{}">SSL REPORT</a></td></tr>\n'.format(complete_report)
+                else:
+                    data += '<td>-</td></tr>\n'
 
     # Replace the target string
     content = REPORT_HTML
@@ -58,6 +85,13 @@ def process(
         content = f.readlines()
     servers = [x.strip() for x in content]
 
+    if not os.path.exists(os.path.dirname(SUMMARY_CSV)):
+        try:
+            os.makedirs(os.path.dirname(SUMMARY_CSV))
+        except OSError as exc:
+            if exc.errno != errno.EEXIST:
+                raise
+
     with open(SUMMARY_CSV, "w") as outfile:
         # write column names to file
         outfile.write("#{}\n".format(",".join(str(s) for s in SUMMARY_COL_NAMES)))
@@ -67,6 +101,7 @@ def process(
             print("Start analyzing {} ...".format(server))
             SSLLabsClient(check_progress_interval_secs).analyze(server, summary_csv)
         except Exception as e:
+            print(e)
             traceback.print_stack()
             ret = 1
 
