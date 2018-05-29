@@ -9,7 +9,7 @@ import requests
 import time
 
 
-API_URL = "https://api.ssllabs.com/api/v2/analyze"
+API_URL = "https://api.ssllabs.com/api/v3/analyze"
 
 CHAIN_ISSUES = {
     "0": "none",
@@ -21,6 +21,14 @@ CHAIN_ISSUES = {
     "32": "the certificates form a chain but cannot be validated",
 }
 
+OPEN_SSL_CCS = {
+    "1": "test failed",
+    "0": "unknown",
+    "1": "not vulnerable",
+    "2": "possibly vulnerable, but not exploitable",
+    "3": "vulnerable and exploitable",
+}
+
 # Forward secrecy protects past sessions against future compromises of secret keys or passwords.
 FORWARD_SECRECY = {
     "0": "No WEAK",
@@ -29,12 +37,44 @@ FORWARD_SECRECY = {
     "4": "Yes (with most browsers) ROBUST",
 }
 
+OPEN_SSL_LUCKY_MINUS_20 = {
+    "1": "test failed",
+    "0": "unknown",
+    "1": "not vulnerable",
+    "2": "vulnerable and insecure"
+}
+
+BLEICHENBACHER = {
+    "-1": "test failed",
+    "0": "unknown",
+    "1": "not vulnerable",
+    "2": "vulnerable (weak oracle)",
+    "3": "vulnerable (strong oracle)",
+    "4": "inconsistent results"
+}
+
+TICKETBLEED = {
+    "1": "test failed",
+    "0": "unknown",
+    "1": "not vulnerable",
+    "2": "vulnerable and insecure"
+}
+
+POODLE_TLS = {
+    "3": "timeout",
+    "-2": "TLS not supported",
+    "-1": "test failed",
+    "0": "unknown",
+    "1": "not vulnerable",
+    "2": "vulnerable"
+}
+
 PROTOCOLS = ["TLS 1.2", "TLS 1.1", "TLS 1.0", "SSL 3.0 INSECURE", "SSL 2.0 INSECURE"]
 
 VULNERABLES = ["Vuln Beast", "Vuln Drown", "Vuln Heartbleed", "Vuln FREAK",
-               "Vuln openSsl Ccs", "Vuln openSSL LuckyMinus20", "Vuln POODLE", "Vuln POODLE TLS"]
+               "Vuln openSsl Ccs", "Vuln openSSL LuckyMinus20", "Vuln POODLE", "Vuln POODLE TLS", "Bleichenbacher", "Ticketbleed" ]
 
-SUMMARY_COL_NAMES = ["Domain", "Grade", "IP", "Status", "HasWarnings", "Cert Expiry", "Chain Status", "Forward Secrecy", "Heartbeat ext"] + VULNERABLES + PROTOCOLS + ["Complete Report"]
+SUMMARY_COL_NAMES = ["Domain", "Grade", "Grade (Trust ign.)", "IP", "Status", "HasWarnings", "Cert Expiry", "Chain Status", "Forward Secrecy", "Heartbeat ext"] + VULNERABLES + PROTOCOLS + ["Full Report"]
 
 
 class SSLLabsClient():
@@ -82,30 +122,38 @@ class SSLLabsClient():
     def append_summary_csv(self, summary_file, host, data):
         # write the summary to file
         with open(summary_file, "a") as outfile:
+            if 'certs' in data:
+                validUntil = "-" if not data['certs'] else self.prepare_datetime(data['certs'][0]['notAfter'])
+            else:
+                validUntil = "-"
             if 'endpoints' in data:
                 for ep in data["endpoints"]:
+                    if 'certChains' in ep["details"]:
+                        chainIssues = "-" if not ep["details"]["certChains"] else CHAIN_ISSUES[str(ep["details"]["certChains"][0]["issues"])]
+                    else:
+                        chainIssues = "-"
                     # see SUMMARY_COL_NAMES
                     summary = [
                         host,
                         "-" if 'grade' not in ep else ep["grade"],
+                        "-" if 'gradeTrustIgnored' not in ep else ep["gradeTrustIgnored"],
                         "-" if 'ipAddress' not in ep else ep["ipAddress"],
                         ep["statusMessage"],
                         "-" if 'hasWarnings' not in ep else ep["hasWarnings"],
-                        "-" if 'notAfter' not in ep["details"]["cert"] else self.prepare_datetime(ep["details"]["cert"]["notAfter"]),
-                        "-" if 'issues' not in ep["details"]["chain"] else CHAIN_ISSUES[str(ep["details"]["chain"]["issues"])],
+                        validUntil,
+                        chainIssues,
                         "-" if 'forwardSecrecy' not in ep["details"] else FORWARD_SECRECY[str(ep["details"]["forwardSecrecy"])],
                         "-" if 'heartbeat' not in ep["details"] else ep["details"]["heartbeat"],
                         "-" if 'vulnBeast' not in ep["details"] else ep["details"]["vulnBeast"],
                         "-" if 'drownVulnerable' not in ep["details"] else ep["details"]["drownVulnerable"],
                         "-" if 'heartbleed' not in ep["details"] else ep["details"]["heartbleed"],
                         "-" if 'freak' not in ep["details"] else ep["details"]["freak"],
-                        "-" if 'openSslCcs' not in ep["details"] else
-                            False if ep["details"]["openSslCcs"] == 1 else True,
-                        "-" if 'openSSLLuckyMinus20' not in ep["details"] else
-                            False if ep["details"]["openSSLLuckyMinus20"] == 1 else True,
+                        "-" if 'openSslCcs' not in ep["details"] else OPEN_SSL_CCS[str(ep["details"]["openSslCcs"])],
+                        "-" if 'openSSLLuckyMinus20' not in ep["details"] else OPEN_SSL_LUCKY_MINUS_20[str(ep["details"]["openSSLLuckyMinus20"])],
                         "-" if 'poodle' not in ep["details"] else ep["details"]["poodle"],
-                        "-" if 'poodleTls' not in ep["details"] else
-                            False if ep["details"]["poodleTls"] == 1 else True,
+                        "-" if 'poodleTls' not in ep["details"] else POODLE_TLS[str(ep["details"]["poodleTls"])],
+                        "-" if 'bleichenbacher' not in ep["details"] else BLEICHENBACHER[str(ep["details"]["bleichenbacher"])],
+                        "-" if 'ticketbleed' not in ep["details"] else TICKETBLEED[str(ep["details"]["ticketbleed"])]
                     ]
                     for protocol in PROTOCOLS:
                         found = False
@@ -114,14 +162,16 @@ class SSLLabsClient():
                                 found = True
                                 break
                         summary += ["Yes" if found is True else "No"]
-                    summary += ["{}.json".format(host)]
             else:
                 # Catch "Unable to resolve domain name"
                 summary = [
                     host,
-                    "-",
-                    "Unable to resolve domain name",
+                    "-","-","-",
+                    data['statusMessage'],
                     "-","-","-","-","-","-","-","-","-","-","-","-","-","-","-","-","-","-","-","-"
                 ]
+
+            # append link to the full report
+            summary += ["{}.json".format(host)]
 
             outfile.write(",".join(str(s) for s in summary) + "\n")

@@ -27,8 +27,12 @@ body {
 .tftable tr.B, tr.C, tr.D {
   color:darkorange;
 }
-.tftable tr.E, tr.F {
+.tftable tr.E, tr.F, tr.T {
   color:red;
+}
+.tftable tr.T {
+  color:gray;
+  opacity:0.5;
 }
 .tftable tr {
   background-color:#eeeeee;

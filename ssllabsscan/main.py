@@ -43,8 +43,7 @@ def output_summary_html(input_csv, output_html):
                     cssclass = row[1][:1]
                 data += '<tr class="{}">'.format(cssclass)
 
-
-                data += '<td><a href="https://{}">{}</a></td>'.format(row[0][1:], row[0])
+                data += '<td><a href="https://{}">{}</a></td>'.format(row[0], row[0])
                 row.pop(0)
 
                 # get the link to the full report
@@ -55,10 +54,7 @@ def output_summary_html(input_csv, output_html):
                 data += '<td>{}</td>'.format('</td><td>'.join(row))
 
                 # append the link to the full report
-                if complete_report != '-':
-                    data += '<td><a href="{}">SSL REPORT</a></td></tr>\n'.format(complete_report)
-                else:
-                    data += '<td>-</td></tr>\n'
+                data += '<td><a href="{}">FULL REPORT</a></td></tr>\n'.format(complete_report)
 
     # Replace the target string
     content = REPORT_HTML
