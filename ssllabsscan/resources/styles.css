@@ -32,7 +32,7 @@ body {
 }
 .tftable tr.T {
   color:gray;
-  opacity:0.5;
+  opacity:gray;
 }
 .tftable tr {
   background-color:#eeeeee;

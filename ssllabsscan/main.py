@@ -10,6 +10,7 @@ import traceback
 import datetime
 import errno
 
+
 from ssllabsscan.report_template import REPORT_HTML
 from ssllabsscan.ssllabs_client import SSLLabsClient, SUMMARY_COL_NAMES
 
@@ -19,8 +20,10 @@ SUMMARY_CSV = "{}/{}".format(TARGET_DIR, "summary.csv")
 SUMMARY_HTML = "{}/{}".format(TARGET_DIR, "summary.html")
 VAR_TITLE = "{{VAR_TITLE}}"
 VAR_DATA = "{{VAR_DATA}}"
-DEFAULT_TITLE = "SSL Labs Analysis Summary Report (Last scan: " + datetime.datetime.now(datetime.timezone.utc).strftime('%d-%m-%Y %H:%M (UTC)') + ")"
+DEFAULT_TITLE = "Qualys SSL Labs Analysis Report [" + datetime.datetime.now(datetime.timezone.utc).strftime('%d.%m.%Y %H:%M (UTC)') + "]"
+RESOURCE_DIR="resources/"
 DEFAULT_STYLES = "styles.css"
+STICKY_TABLE_JS = "stickytableheader.js"
 
 
 def output_summary_html(input_csv, output_html):
@@ -31,9 +34,10 @@ def output_summary_html(input_csv, output_html):
         reader = csv.reader(csvfile)
         for row in reader:
             if row[0].startswith("#"):
-                data += "<tr><th>{}</th>".format(row[0][1:])
+                data += "<thead>\n<tr><th>{}</th>".format(row[0][1:])
                 row.pop(0)
                 data += "<th>{}</th></tr>\n".format('</th><th>'.join(row))
+                data += "\n</thead>\n<tbody>\n"
             else:
                 # css of row
                 if row[1][:1] == '-':
@@ -56,6 +60,8 @@ def output_summary_html(input_csv, output_html):
                 # append the link to the full report
                 data += '<td><a href="{}">FULL REPORT</a></td></tr>\n'.format(complete_report)
 
+        data += "\n</tbody>\n"
+
     # Replace the target string
     content = REPORT_HTML
     content = content.replace(VAR_TITLE, DEFAULT_TITLE)
@@ -66,9 +72,10 @@ def output_summary_html(input_csv, output_html):
         file.write(content)
 
     # copy styles.css
-    styles_css = os.path.join(os.path.dirname(output_html), DEFAULT_STYLES)
-    if not os.path.exists(styles_css):
-        shutil.copyfile(os.path.join(os.path.dirname(__file__), DEFAULT_STYLES), styles_css)
+    shutil.copyfile(os.path.join(os.path.dirname(__file__), RESOURCE_DIR+DEFAULT_STYLES), os.path.join(os.path.dirname(output_html), DEFAULT_STYLES))
+
+    # copy sticky table javascript file
+    shutil.copyfile(os.path.join(os.path.dirname(__file__), RESOURCE_DIR+STICKY_TABLE_JS), os.path.join(os.path.dirname(output_html), STICKY_TABLE_JS))
 
 
 def process(

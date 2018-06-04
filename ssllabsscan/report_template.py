@@ -11,6 +11,11 @@ REPORT_HTML = """
 <table class="tftable" border="1">
 {{VAR_DATA}}
 </table>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+<script src="./stickytableheader.js"></script>
+<script>
+	$("table").stickyTableHeaders();
+</script>
 </body>
 </html>
 """
